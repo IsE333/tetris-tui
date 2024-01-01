@@ -1,5 +1,3 @@
-use std::cmp::min;
-
 use crossterm::event::KeyCode;
 use rand::Rng;
 
@@ -59,23 +57,23 @@ impl GameLoop {
         self.counter += 1;
         return;
     }
-    pub fn input(&mut self, key: KeyCode) {
+    pub fn input(&mut self, key: i32) {
         let Some(piece) = &mut self.piece else {
             return;
         };
-        if key == KeyCode::Left {
+        if key == 1 {
             piece.movement(KeyCode::Left, &self.arr);
         }
-        if key == KeyCode::Right {
+        if key == 2 {
             piece.movement(KeyCode::Right, &self.arr);
         }
-        if key == KeyCode::Down {
+        if key == 3 {
             piece.down(&self.arr);
         }
-        if key == KeyCode::Char('z') {
+        if key == 4 {
             piece.rotate(false, &self.arr);
         }
-        if key == KeyCode::Char('x') {
+        if key == 5 {
             piece.rotate(true, &self.arr);
         }
     }

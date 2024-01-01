@@ -1,86 +1,98 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+
 mod tetris;
 
+use eframe::{
+    egui::{self, Key},
+    epaint::Stroke,
+};
 use tetris::GameLoop;
 
-use crossterm::{
-    event::{self, KeyCode, KeyEventKind},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    ExecutableCommand,
-};
-use ratatui::{
-    prelude::{CrosstermBackend, Rect, Stylize, Terminal},
-    widgets::Paragraph,
-};
-use std::io::{stdout, Result};
+fn main() -> Result<(), eframe::Error> {
+    env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([540.0, 540.0]),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "egui TETRIS",
+        options,
+        Box::new(|cc| {
+            // This gives us image support:
+            egui_extras::install_image_loaders(&cc.egui_ctx);
 
-fn main() -> Result<()> {
-    stdout().execute(EnterAlternateScreen)?;
-    enable_raw_mode()?;
-    let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
-    terminal.clear()?;
+            Box::<TetrisApp>::default()
+        }),
+    )
+}
 
-    let mut game = GameLoop::new();
+struct TetrisApp {
+    game: GameLoop,
+}
 
-    let mut text_a3 = String::new();
-    let mut text_a4 = String::new();
-    let time = std::time::SystemTime::now();
+impl Default for TetrisApp {
+    fn default() -> Self {
+        Self {
+            game: GameLoop::new(),
+        }
+    }
+}
 
-    let area0: Rect = Rect::new(1, 0, 18, 1);
-    let area1: Rect = Rect::new(2, 2, 18, 1);
-    let area2: Rect = Rect::new(1, 4, 20, 20);
-    let area3: Rect = Rect::new(1, 25, 20, 1);
-    let area4: Rect = Rect::new(23, 23, 10, 1);
+impl TetrisApp {
+    fn inputs(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| i.key_pressed(Key::ArrowLeft)) {
+            self.game.input(1);
+        }
+        if ctx.input(|i| i.key_pressed(Key::ArrowRight)) {
+            self.game.input(2);
+        }
+        if ctx.input(|i| i.key_pressed(Key::ArrowDown)) {
+            self.game.input(3);
+        }
+        if ctx.input(|i| i.key_pressed(Key::Z)) {
+            self.game.input(4);
+        }
+        if ctx.input(|i| i.key_pressed(Key::X)) {
+            self.game.input(5);
+        }
+    }
+    fn render_game_map(&self, ui: &mut egui::Ui) {
+        for y in 0..20 {
+            for x in 0..10 {
+                let color = match self.game.map[y][x] {
+                    Some(1) => egui::Color32::from_rgb(255, 0, 0),
+                    _ => egui::Color32::from_rgb(0, 0, 0),
+                };
 
-    let mut counter = 0;
-    loop {
-        let size = terminal.size()?;
-
-        //print!("{} {}, ", size.height, size.width);
-        //print!("{} ", i[0][0]);
-
-        game.tick();
-        //text_a3 = counter.to_string();
-        text_a3 = game.get_debug_value();
-        text_a4 = time.elapsed().unwrap().as_secs().to_string();
-
-        terminal.draw(|frame| {
-            frame.render_widget(Paragraph::new("press 'q' to quit").white().on_blue(), area0);
-            frame.render_widget(Paragraph::new(" T  E  T  R  I  S").white().on_red(), area1);
-
-            frame.render_widget(
-                Paragraph::new(game.map_to_string()).yellow().on_dark_gray(),
-                area2,
-            );
-            frame.render_widget(Paragraph::new(text_a3).white().on_red(), area3);
-            frame.render_widget(Paragraph::new(text_a4).white().on_red(), area4);
-        })?;
-
-        if event::poll(std::time::Duration::from_millis(16))? {
-            if let event::Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    if key.code == KeyCode::Char('q') {
-                        break;
-                    }
-                    game.input(key.code);
-                }
+                ui.painter().rect(
+                    self.render_coord(x, y, 10.0, 70.0, 23.0),
+                    20.0,
+                    color,
+                    Stroke::new(0.0, color),
+                );
             }
         }
     }
-
-    stdout().execute(LeaveAlternateScreen)?;
-    disable_raw_mode()?;
-    Ok(())
-}
-
-/*
-counter += 1;
-if counter % 100 == 0 {
-    for i in 0..20 {
-        for j in 0..10 {
-            game.arr[i][j] = " ";
-        }
+    fn render_coord(&self, x: usize, y: usize, x_off: f32, y_off: f32, n: f32) -> egui::Rect {
+        return egui::Rect::from_min_size(
+            egui::Pos2::new(x as f32 * n + x_off, y as f32 * n + y_off),
+            egui::Vec2::new(n, n),
+        );
     }
 }
-game.arr[2 * counter / 10 % 20][counter / 11 % 10] = "█";
-game.arr[2 * counter / 10 % 20][counter / 13 % 10] = "█";
-*/
+
+impl eframe::App for TetrisApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.game.tick();
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("TETRIS");
+            ui.label("Game:");
+
+            self.render_game_map(ui);
+            ui.label(self.game.get_debug_value());
+
+            self.inputs(ctx);
+        });
+    }
+}
