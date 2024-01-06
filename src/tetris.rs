@@ -1,5 +1,12 @@
-use crossterm::event::KeyCode;
 use rand::Rng;
+
+pub enum Input {
+    Left,
+    Right,
+    Down,
+    RotateClockwise,
+    RotateCounterClockwise,
+}
 
 pub struct GameLoop {
     counter: i32,
@@ -14,68 +21,33 @@ impl GameLoop {
 
         GameLoop {
             counter: 0,
-            arr: [[None; 10]; 20],
+            arr: [[None; 10]; 20], //without the piece array
             piece,
             map: [[None; 10]; 20],
         }
     }
 
-    pub fn get_arr(&self, i: usize, j: usize) -> Option<i8> {
-        return self.arr[i][j];
-    }
-
-    pub fn map_to_string(&self) -> String {
-        let mut s = String::new();
-        for i in 0..20 {
-            for j in 0..10 {
-                match self.map[i][j] {
-                    Some(x) => s.push_str("██"),
-                    None => s.push_str("  "),
-                }
-                /*if self.map[i][j] == 0 {
-                    s.push_str("  ");
-                } else {
-                    s.push_str("[]");
-                }*/
-            }
-            s.push_str("\n");
-        }
-        s
-    }
-
     pub fn tick(&mut self) {
-        /*
-        let mut rng = rand::thread_rng();
-        let mut i = rng.gen_range(0..20);
-        let mut j = rng.gen_range(0..10);
-        self.arr[i][j] = Some(1);*/
-
         if self.counter % 30 == 0 {
             self.action();
+            self.render_piece();
         }
-        self.render_piece();
         self.counter += 1;
         return;
     }
-    pub fn input(&mut self, key: i32) {
+
+    pub fn input(&mut self, key: Input) {
         let Some(piece) = &mut self.piece else {
             return;
         };
-        if key == 1 {
-            piece.movement(KeyCode::Left, &self.arr);
+        match key {
+            Input::Left => piece.movement(Input::Left, &self.arr),
+            Input::Right => piece.movement(Input::Right, &self.arr),
+            Input::Down => piece.down(&self.arr),
+            Input::RotateClockwise => piece.rotate(true, &self.arr),
+            Input::RotateCounterClockwise => piece.rotate(false, &self.arr),
         }
-        if key == 2 {
-            piece.movement(KeyCode::Right, &self.arr);
-        }
-        if key == 3 {
-            piece.down(&self.arr);
-        }
-        if key == 4 {
-            piece.rotate(false, &self.arr);
-        }
-        if key == 5 {
-            piece.rotate(true, &self.arr);
-        }
+        self.render_piece();
     }
     fn render_piece(&mut self) {
         for i in 0..20 {
@@ -86,58 +58,51 @@ impl GameLoop {
         if let Some(piece) = &self.piece {
             for i in 0..4 {
                 for j in 0..4 {
-                    if piece.arr[i][j] == Some(1) {
+                    if piece.arr[i][j] != None {
                         self.map[(piece.offset[0] + i as i32) as usize][piece.offset_h(j)] =
-                            Some(1);
+                            piece.arr[i][j];
                     }
                 }
             }
         }
     }
-    pub fn get_debug_value(&self) -> String {
-        let mut s = String::new();
-        s.push_str("y:");
-        s.push_str(&self.piece.as_ref().unwrap().offset[0].to_string());
-        s.push_str(" x:");
-        s.push_str(&self.piece.as_ref().unwrap().offset[1].to_string());
-        s.push_str(" ğ:");
 
-        s
-    }
     pub fn action(&mut self) {
-        let mut canMove = true;
+        let mut can_move = true;
         if let Some(piece) = &mut self.piece {
             for i in 0..4 {
                 for j in 0..4 {
-                    if piece.arr[i][j] != Some(1) {
+                    if piece.arr[i][j] == None {
                         continue;
                     }
                     if piece.offset_v(i) as i32 + 1 >= 20 {
-                        canMove = false;
+                        can_move = false;
                         break;
                     }
                     if self.arr[piece.offset_v(i) + 1][piece.offset_h(j)] != None {
-                        canMove = false;
+                        can_move = false;
                     }
                 }
             }
-            if canMove {
+            if can_move {
+                //move 1 down
                 piece.offset[0] += 1;
             } else {
+                // place piece
                 for i in 0..4 {
                     for j in 0..4 {
-                        if piece.arr[i][j] == Some(1) {
-                            self.arr[piece.offset_v(i)][piece.offset_h(j)] = Some(1);
+                        if piece.arr[i][j] != None {
+                            self.arr[piece.offset_v(i)][piece.offset_h(j)] = piece.arr[i][j];
                         }
                     }
                 }
-                self.line_check(self.piece.as_ref().unwrap().offset[0] as usize);
+                self.line_check();
                 self.piece = Option::Some(Piece::new());
             }
         }
     }
 
-    fn line_check(&mut self, p: usize) {
+    fn line_check(&mut self) {
         let mut bool_arr: [bool; 20] = [false; 20];
         for i in 0..20 {
             let mut is_full = true;
@@ -166,14 +131,12 @@ impl GameLoop {
                     continue;
                 }
                 self.arr[i + count][j] = self.arr[i][j];
-                //self.arr[i][j] = self.arr[i - count][j];
             }
         }
     }
 }
 
 pub struct Piece {
-    p_type: i32,
     rotate_count: u16,
     centern_offset: [[i32; 2]; 4],
     centerp_offset: [[i32; 2]; 4],
@@ -183,19 +146,19 @@ pub struct Piece {
 
 impl Piece {
     pub fn new() -> Piece {
-        let pT = rand::thread_rng().gen_range(0..7);
+        let p_t: i8 = rand::thread_rng().gen_range(0..7);
         let mut ar: [[Option<i8>; 4]; 4] = [[None; 4]; 4];
         let mut centern_offset: [[i32; 2]; 4] = [[0; 2]; 4];
         let mut centerp_offset: [[i32; 2]; 4] = [[0; 2]; 4];
-        self::Piece::init(&mut ar, &mut centern_offset, &mut centerp_offset, pT);
+        self::Piece::init(&mut ar, &mut centern_offset, &mut centerp_offset, p_t);
 
         Piece {
-            p_type: pT,
+            //p_type: p_t,
             rotate_count: (u16::MAX - 7) / 2,
             arr: ar,
             centern_offset: centern_offset,
             centerp_offset: centerp_offset,
-            offset: [0, 5],
+            offset: [0, 3],
         }
     }
 
@@ -223,60 +186,56 @@ impl Piece {
     pub fn down(&mut self, tmp_arr: &[[Option<i8>; 10]; 20]) {
         for i in 0..4 {
             for j in 0..4 {
-                if self.arr[i][j] == Some(1) {
-                    if self.offset_v(i) as i32 + 1 >= 20 {
-                        return;
-                    }
-                    let i = (self.offset_v(i) as i32 + 1) as usize;
-                    if tmp_arr[i][self.offset_h(j)] != None {
-                        return;
-                    }
+                if self.arr[i][j] == None {
+                    continue;
+                }
+                if self.offset_v(i) as i32 + 1 >= 20 {
+                    return;
+                }
+                let i = (self.offset_v(i) as i32 + 1) as usize;
+                if tmp_arr[i][self.offset_h(j)] != None {
+                    return;
                 }
             }
         }
         self.offset[0] += 1;
     }
 
-    pub fn movement(&mut self, dir: KeyCode, tmp_arr: &[[Option<i8>; 10]; 20]) {
-        let mut canMove = true;
+    pub fn movement(&mut self, dir: Input, tmp_arr: &[[Option<i8>; 10]; 20]) {
+        let mut can_move = true;
         let direction;
-        if dir == KeyCode::Left {
-            direction = -1;
-        } else {
-            direction = 1;
+        match dir {
+            Input::Left => direction = -1,
+            Input::Right => direction = 1,
+            _ => return,
         }
         for i in 0..4 {
             for j in 0..4 {
-                if self.arr[i][j] == Some(1) {
-                    if self.offset_h(j) as i32 + direction < 0
-                        || self.offset_h(j) as i32 + direction >= 10
-                    {
-                        canMove = false;
-                        break;
-                    }
-                    if ({
-                        let j = (self.offset_h(j) as i32 + direction) as usize;
-                        tmp_arr[self.offset_v(i)][j]
-                    }) != None
-                    {
-                        canMove = false;
-                    }
+                if self.arr[i][j] == None {
+                    continue;
+                }
+                if self.offset_h(j) as i32 + direction < 0
+                    || self.offset_h(j) as i32 + direction >= 10
+                {
+                    can_move = false;
+                    break;
+                }
+                if ({
+                    let j = (self.offset_h(j) as i32 + direction) as usize;
+                    tmp_arr[self.offset_v(i)][j]
+                }) != None
+                {
+                    can_move = false;
                 }
             }
         }
-        if canMove {
-            if dir == KeyCode::Left {
-                self.offset[1] -= 1;
-            }
-            if dir == KeyCode::Right {
-                self.offset[1] += 1;
-            }
+        if can_move {
+            self.offset[1] += direction;
         }
     }
 
     pub fn rotate(&mut self, clock_wise: bool, tmp_arr: &[[Option<i8>; 10]; 20]) {
         let mut ar: [[Option<i8>; 4]; 4] = [[None; 4]; 4];
-        let mut canRotate = true;
 
         if clock_wise {
             self.rotate_count += 1;
@@ -328,32 +287,30 @@ impl Piece {
         self.arr = ar;
     }
 
-    fn init(a: &mut [[Option<i8>; 4]; 4], cn: &mut [[i32; 2]; 4], cp: &mut [[i32; 2]; 4], pT: i32) {
-        if pT == 0 {
+    fn init(a: &mut [[Option<i8>; 4]; 4], cn: &mut [[i32; 2]; 4], cp: &mut [[i32; 2]; 4], p_t: i8) {
+        if p_t == 0 {
             // I
-            a[0][2] = Some(1);
-            a[1][2] = Some(1);
-            a[2][2] = Some(1);
-            a[3][2] = Some(1);
+            a[0][2] = Some(p_t);
+            a[1][2] = Some(p_t);
+            a[2][2] = Some(p_t);
+            a[3][2] = Some(p_t);
             //c.copy_from_slice(&[[0, 0], [0, 0], [-1, 0], [0, 1]]);
             cp[0][1] = 1;
             cp[2][1] = 1;
             cn[1][0] = 1;
             cn[3][0] = 1;
-        }
-        if pT == 1 {
+        } else if p_t == 1 {
             // O
-            a[1][1] = Some(1);
-            a[1][2] = Some(1);
-            a[2][1] = Some(1);
-            a[2][2] = Some(1);
-        }
-        if pT == 2 {
+            a[1][1] = Some(p_t);
+            a[1][2] = Some(p_t);
+            a[2][1] = Some(p_t);
+            a[2][2] = Some(p_t);
+        } else if p_t == 2 {
             // T
-            a[1][1] = Some(1);
-            a[2][0] = Some(1);
-            a[2][1] = Some(1);
-            a[2][2] = Some(1);
+            a[1][1] = Some(p_t);
+            a[2][0] = Some(p_t);
+            a[2][1] = Some(p_t);
+            a[2][2] = Some(p_t);
             cp[0][0] = -1;
             cp[1][0] = -1;
             cp[2][0] = -1;
@@ -362,35 +319,32 @@ impl Piece {
             cn[1][1] = 1;
             cn[2][1] = 1;
             cn[3][1] = 1;
-        }
-        if pT == 3 {
+        } else if p_t == 3 {
             // S
-            a[1][1] = Some(1);
-            a[1][2] = Some(1);
-            a[2][0] = Some(1);
-            a[2][1] = Some(1);
+            a[1][1] = Some(p_t);
+            a[1][2] = Some(p_t);
+            a[2][0] = Some(p_t);
+            a[2][1] = Some(p_t);
             cp[0][1] = -1;
             cp[2][1] = -1;
             cn[1][0] = -1;
             cn[3][0] = -1;
-        }
-        if pT == 4 {
+        } else if p_t == 4 {
             // Z
-            a[1][0] = Some(1);
-            a[1][1] = Some(1);
-            a[2][1] = Some(1);
-            a[2][2] = Some(1);
+            a[1][0] = Some(p_t);
+            a[1][1] = Some(p_t);
+            a[2][1] = Some(p_t);
+            a[2][2] = Some(p_t);
             cp[0][1] = -1;
             cp[2][1] = -1;
             cn[1][0] = -1;
             cn[3][0] = -1;
-        }
-        if pT == 5 {
+        } else if p_t == 5 {
             // L
-            a[0][1] = Some(1);
-            a[1][1] = Some(1);
-            a[2][1] = Some(1);
-            a[2][2] = Some(1);
+            a[0][1] = Some(p_t);
+            a[1][1] = Some(p_t);
+            a[2][1] = Some(p_t);
+            a[2][2] = Some(p_t);
             cp[0][1] = -1;
             cp[1][1] = -1;
             cp[2][1] = -1;
@@ -399,13 +353,12 @@ impl Piece {
             cn[1][0] = -1;
             cn[2][0] = -1;
             cn[3][0] = -1;
-        }
-        if pT == 6 {
+        } else if p_t == 6 {
             // J
-            a[0][1] = Some(1);
-            a[1][1] = Some(1);
-            a[2][1] = Some(1);
-            a[2][0] = Some(1);
+            a[0][1] = Some(p_t);
+            a[1][1] = Some(p_t);
+            a[2][1] = Some(p_t);
+            a[2][0] = Some(p_t);
             cp[0][1] = -1;
             cp[1][1] = -1;
             cp[2][1] = -1;
