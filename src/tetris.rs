@@ -32,6 +32,7 @@ impl GameLoop {
             self.action();
             self.render_piece();
         }
+        self.piece.as_mut().expect("").tick();
         self.counter += 1;
         return;
     }
@@ -69,36 +70,12 @@ impl GameLoop {
 
     pub fn action(&mut self) {
         let mut can_move = true;
-        if let Some(piece) = &mut self.piece {
-            for i in 0..4 {
-                for j in 0..4 {
-                    if piece.arr[i][j] == None {
-                        continue;
-                    }
-                    if piece.offset_v(i) as i32 + 1 >= 20 {
-                        can_move = false;
-                        break;
-                    }
-                    if self.arr[piece.offset_v(i) + 1][piece.offset_h(j)] != None {
-                        can_move = false;
-                    }
-                }
-            }
-            if can_move {
-                //move 1 down
-                piece.offset[0] += 1;
-            } else {
-                // place piece
-                for i in 0..4 {
-                    for j in 0..4 {
-                        if piece.arr[i][j] != None {
-                            self.arr[piece.offset_v(i)][piece.offset_h(j)] = piece.arr[i][j];
-                        }
-                    }
-                }
-                self.line_check();
-                self.piece = Option::Some(Piece::new());
-            }
+        //if let Some(piece) = &mut self.piece {
+        can_move = self.piece.as_mut().expect("No piece").move_down(&self.arr);
+        if !can_move {
+            self.piece.as_mut().expect("No piece").place(&mut self.arr);
+            self.line_check();
+            self.piece = Option::Some(Piece::new());
         }
     }
 
@@ -138,6 +115,10 @@ impl GameLoop {
 
 pub struct Piece {
     rotate_count: u16,
+    move_counter: i16,
+    move_started: bool,
+    move_continue: bool,
+    direction: i32,
     centern_offset: [[i32; 2]; 4],
     centerp_offset: [[i32; 2]; 4],
     pub arr: [[Option<i8>; 4]; 4],
@@ -159,7 +140,18 @@ impl Piece {
             centern_offset: centern_offset,
             centerp_offset: centerp_offset,
             offset: [0, 3],
+            move_counter: -14,
+            move_started: false,
+            move_continue: false,
+            direction: 0,
         }
+    }
+    pub fn tick(&mut self) {
+        if !self.move_continue {
+            self.move_started = false;
+            return;
+        }
+        self.move_continue = false;
     }
 
     pub fn offset_h(&self, j: usize) -> usize {
@@ -201,14 +193,62 @@ impl Piece {
         self.offset[0] += 1;
     }
 
+    pub fn move_down(&mut self, tmp_arr: &[[Option<i8>; 10]; 20]) -> bool {
+        //check if the piece can move down
+        for i in 0..4 {
+            for j in 0..4 {
+                if self.arr[i][j] == None {
+                    continue;
+                }
+                if self.offset_v(i) as i32 + 1 >= 20 {
+                    return false;
+                }
+                if tmp_arr[self.offset_v(i + 1)][self.offset_h(j)] != None {
+                    return false;
+                }
+            }
+        }
+        self.offset[0] += 1; //move 1 down
+        return true;
+    }
+    pub fn place(&mut self, tmp_arr: &mut [[Option<i8>; 10]; 20]) {
+        // place piece
+        for i in 0..4 {
+            for j in 0..4 {
+                if self.arr[i][j] != None {
+                    tmp_arr[self.offset_v(i)][self.offset_h(j)] = self.arr[i][j];
+                }
+            }
+        }
+    }
+
     pub fn movement(&mut self, dir: Input, tmp_arr: &[[Option<i8>; 10]; 20]) {
-        let mut can_move = true;
         let direction;
         match dir {
             Input::Left => direction = -1,
             Input::Right => direction = 1,
             _ => return,
         }
+        if direction != self.direction {
+            self.move_started = false;
+            self.direction = direction;
+        }
+
+        self.move_continue = true;
+        if !self.move_started {
+            self.move_counter = -14;
+            self.move_started = true;
+        }
+
+        if self.move_counter == -14 {
+            self.move_counter += 1;
+        } else if self.move_counter < 7 {
+            self.move_counter += 1;
+            return;
+        } else {
+            self.move_counter = 0;
+        }
+
         for i in 0..4 {
             for j in 0..4 {
                 if self.arr[i][j] == None {
@@ -217,21 +257,19 @@ impl Piece {
                 if self.offset_h(j) as i32 + direction < 0
                     || self.offset_h(j) as i32 + direction >= 10
                 {
-                    can_move = false;
-                    break;
+                    return;
                 }
                 if ({
                     let j = (self.offset_h(j) as i32 + direction) as usize;
                     tmp_arr[self.offset_v(i)][j]
                 }) != None
                 {
-                    can_move = false;
+                    return;
                 }
             }
         }
-        if can_move {
-            self.offset[1] += direction;
-        }
+
+        self.offset[1] += direction;
     }
 
     pub fn rotate(&mut self, clock_wise: bool, tmp_arr: &[[Option<i8>; 10]; 20]) {

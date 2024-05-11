@@ -57,13 +57,13 @@ impl eframe::App for TetrisApp {
 
 impl TetrisApp {
     fn inputs(&mut self, ctx: &egui::Context) {
-        if ctx.input(|i| i.key_pressed(Key::ArrowLeft)) {
+        if ctx.input(|i| i.key_down(Key::ArrowLeft)) {
             self.game.input(tetris::Input::Left);
         }
-        if ctx.input(|i| i.key_pressed(Key::ArrowRight)) {
+        if ctx.input(|i| i.key_down(Key::ArrowRight)) {
             self.game.input(tetris::Input::Right);
         }
-        if ctx.input(|i| i.key_pressed(Key::ArrowDown)) {
+        if ctx.input(|i| i.key_down(Key::ArrowDown)) {
             self.game.input(tetris::Input::Down);
         }
         if ctx.input(|i| i.key_pressed(Key::Z)) {
