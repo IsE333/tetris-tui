@@ -115,6 +115,7 @@ impl GameLoop {
 
 pub struct Piece {
     rotate_count: u16,
+    down_counter: i16,
     move_counter: i16,
     move_started: bool,
     move_continue: bool,
@@ -141,6 +142,7 @@ impl Piece {
             centerp_offset: centerp_offset,
             offset: [0, 3],
             move_counter: -14,
+            down_counter: -7,
             move_started: false,
             move_continue: false,
             direction: 0,
@@ -176,6 +178,11 @@ impl Piece {
     }
 
     pub fn down(&mut self, tmp_arr: &[[Option<i8>; 10]; 20]) {
+        if self.down_counter < 7 {
+            self.down_counter += 1;
+            return;
+        }
+        self.down_counter = 0;
         for i in 0..4 {
             for j in 0..4 {
                 if self.arr[i][j] == None {
