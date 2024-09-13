@@ -69,9 +69,7 @@ impl GameLoop {
     }
 
     pub fn action(&mut self) {
-        let mut can_move = true;
-        //if let Some(piece) = &mut self.piece {
-        can_move = self.piece.as_mut().expect("No piece").move_down(&self.arr);
+        let can_move = self.piece.as_mut().expect("No piece").move_down(&self.arr);
         if !can_move {
             self.piece.as_mut().expect("No piece").place(&mut self.arr);
             self.line_check();
@@ -339,7 +337,6 @@ impl Piece {
             a[1][2] = Some(p_t);
             a[2][2] = Some(p_t);
             a[3][2] = Some(p_t);
-            //c.copy_from_slice(&[[0, 0], [0, 0], [-1, 0], [0, 1]]);
             cp[0][1] = 1;
             cp[2][1] = 1;
             cn[1][0] = 1;
